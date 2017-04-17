@@ -1,4 +1,4 @@
-//Updated 16/4/17
+//Updated 17/4/17
 
 // Import ESP8266 libraries
 #include <ESP8266WiFi.h>
@@ -30,14 +30,18 @@ bool riseFlag=false;
 bool newByte=false;
 byte bitCount=0;
 byte byteCount=0;
-byte byteStore[8]={0,0,0,0,0,0,0,0};
+byte byteStore[9]={0,0,0,0,0,0,0,0,0};
 bool record=false;
 unsigned int msg=0;
 long lastTriggered=0;
 bool msgFlag=false;
 byte msgType=0;
 String outputString="";
-
+long lastMsgTime=0;
+String lastString1="";
+String lastString2="";
+boolean transmitFlag=false;
+long lastTransmit=0;
 
 
 // WiFi parameters
@@ -65,9 +69,10 @@ void setup() {
 
   delay(2000); //Time clearance to ensure registration
   //pinMode(indicatorPin,OUTPUT);
-  SendUdpValue(0,devID[0],devID[0]); //Register LED on server
-  SendUdpValue(0,devID[1],devID[1]); //Register LED on server
-  SendUdpValue(0,devID[2],devID[2]); //Register LED on server
+  //SendUdpValue(0,devID[0],devID[0]); //Register LED on server
+  //SendUdpValue(0,devID[1],devID[1]); //Register LED on server
+  //SendUdpValue(0,devID[2],devID[2]); //Register LED on server
+  Serial.println("Ready");
 
 
 }
@@ -163,6 +168,7 @@ void loop() {
       if (byteCount>=msgLengths[msgType]) {
         //Serial.println("-END-");
         msgFlag=true;
+        lastMsgTime=micros();
         record=false;
         byteCount=0;
       }
@@ -174,11 +180,40 @@ void loop() {
     if (millis()<lastTriggered) {
       lastTriggered=millis();
     }
-    outputString="";
-    for (int i=0; i<msgLengths[msgType]; i++) {
-      outputString=outputString+byteStore[i]+',';
+    //Shows all bytes, comma seperated
+//    outputString="";
+//    for (int i=0; i<msgLengths[msgType]; i++) {
+//      outputString=outputString+byteStore[i]+',';
+//    }
+    
+    //In transmission form
+    unsigned long dID = 0;
+    dID = byteStore[1] * 16777216 + byteStore[2] * 65536 + byteStore[3] * 256 + byteStore[4];
+    outputString=String(byteStore[0]-120) + ',' + dID;
+    if (msgType==0 || msgType==3) {
+      unsigned long sMsg = 0;
+      sMsg  = byteStore[5] * 16777216 + byteStore[6] * 65536 + byteStore[7] * 256 + byteStore[8];
+      outputString=outputString +','+sMsg;
     }
-    Serial.println(outputString);
+    else if (msgType==1) {
+      byte sMsg = 0;
+      sMsg = byteStore[5];
+      outputString=outputString +','+sMsg;
+    }
+    else if (msgType==2) {
+      unsigned int sMsg = 0;
+      sMsg  = byteStore[5] * 256 + byteStore[6];
+      outputString=outputString +','+sMsg;
+    }
+    //outputString=outputString +','+lastMsgTime +','+(micros()-lastMsgTime);
+    if ((outputString==lastString1 || outputString==lastString2) && (millis()-lastTransmit>500)) {
+      lastTransmit=millis();
+      Serial.println(outputString);
+    }
+    lastString2=lastString1;
+    lastString1=outputString;
+    
+    
     
 //    if ((msg==22882) && millis()-lastTriggered>300) {
 //      lastTriggered=millis();
