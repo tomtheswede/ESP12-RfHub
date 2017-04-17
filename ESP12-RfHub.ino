@@ -219,7 +219,7 @@ void loop() {
 
 void SendUdpString(String msg) {
   //Print GPIO state in //Serial
-  Serial.print("-Value sent via UDP: ");
+  Serial.print("-UDP sent: ");
   Serial.println(msg);
   // send a message, to the IP address and port
   Udp.beginPacket(ipAdd,localPort);
