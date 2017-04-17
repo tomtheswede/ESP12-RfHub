@@ -4,8 +4,8 @@
 #include <ESP8266WiFi.h>
 #include <WiFiUdp.h>
 
-const unsigned long devID[3] = {24249122,12312414,12313}; //Name of sensor
-const unsigned long devType[3] = {5,13,8}; //Type of sensor is temperature
+const unsigned long devID[2] = {24249122,1231}; //Name of sensor
+const unsigned long devType[2] = {1,13}; //Type of sensor is button and RF server
 
 const int readPin = 16; //16 for v0.1 of PWM board print
 
@@ -50,7 +50,7 @@ const char* password = "vanillamoon576"; //Enter your WiFi pasword here in the q
 
 //Server details
 unsigned int localPort = 5007;  //UDP send port
-const char* ipAdd = "192.168.0.100"; //Server address
+const char* ipAdd = "192.168.1.100"; //Server address
 byte packetBuffer[512]; //buffer for incoming packets
 
 WiFiUDP Udp; //Instance to send packets
@@ -65,13 +65,12 @@ void setup() {
   
   // put your setup code here, to run once:
   Serial.begin(115200);
-  //ConnectWifi();  //Only include connection if in produduction mode
+  ConnectWifi();  //Only include connection if in produduction mode
 
   delay(2000); //Time clearance to ensure registration
   //pinMode(indicatorPin,OUTPUT);
-  //SendUdpValue(0,devID[0],devID[0]); //Register LED on server
-  //SendUdpValue(0,devID[1],devID[1]); //Register LED on server
-  //SendUdpValue(0,devID[2],devID[2]); //Register LED on server
+  SendUdpValue(0,devID[0],devID[0]); //Register LED on server
+  SendUdpValue(0,devID[1],devID[1]); //Register LED on server
   Serial.println("Ready");
 
 
@@ -96,6 +95,9 @@ void ConnectWifi() {
 }
 
 void loop() {
+  if (WiFi.status() != WL_CONNECTED) { //Reconnect if required
+    ConnectWifi();
+  }
   //For detecting rising and falling edges of a waveform
   if (micros()-lastRead>10) { //Takes 80us to fill buffer
     rfBuffer=rfBuffer<<1;
@@ -205,39 +207,25 @@ void loop() {
       sMsg  = byteStore[5] * 256 + byteStore[6];
       outputString=outputString +','+sMsg;
     }
-    //outputString=outputString +','+lastMsgTime +','+(micros()-lastMsgTime);
-    if ((outputString==lastString1 || outputString==lastString2) && (millis()-lastTransmit>500)) {
+    if ((outputString==lastString1 || outputString==lastString2) && (millis()-lastTransmit>550)) {
       lastTransmit=millis();
-      Serial.println(outputString);
+      SendUdpString(outputString);
+      //Serial.println(outputString);
     }
     lastString2=lastString1;
     lastString1=outputString;
-    
-    
-    
-//    if ((msg==22882) && millis()-lastTriggered>300) {
-//      lastTriggered=millis();
-//      Serial.println("Button A triggered");
-//      SendUdpValue(1,devID[0],0);
-//    }
-//    if (msg==22884 && millis()-lastTriggered>300) {
-//      lastTriggered=millis();
-//      Serial.println("Button B triggered");
-//      SendUdpValue(1,devID[1],0);
-//    }
-//    if (msg==43904 && millis()-lastTriggered>300) {
-//      lastTriggered=millis();
-//      Serial.println("Remote 2 triggered");
-//      SendUdpValue(1,devID[1],0);
-//    }
-//    if (msg==38726 && millis()-lastTriggered>10000) {
-//      lastTriggered=millis();
-//      Serial.println("Door triggered");
-//      SendUdpValue(1,devID[2],0);
-//    }
   }
 }
 
+void SendUdpString(String msg) {
+  //Print GPIO state in //Serial
+  Serial.print("-Value sent via UDP: ");
+  Serial.println(msg);
+  // send a message, to the IP address and port
+  Udp.beginPacket(ipAdd,localPort);
+  Udp.print(msg);
+  Udp.endPacket();
+}
 
 void SendUdpValue(byte type, unsigned long devID, unsigned long value) {
   //Print GPIO state in //Serial
