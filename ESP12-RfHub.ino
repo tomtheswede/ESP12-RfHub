@@ -28,7 +28,7 @@ const long t4=700;
 const byte msgLengths[4]={9,6,7,9};
 
 
-long lastRead=millis();
+long lastRead=micros();
 byte rfBuffer=0;
 byte bitBuffer=0;
 long riseTime=lastRead;
@@ -47,11 +47,13 @@ long lastTriggered=0;
 bool msgFlag=false;
 byte msgType=0;
 String outputString="";
-long lastMsgTime=0;
+//unsigned long lastMsgTime=0;
 String lastString1="";
 String lastString2="";
 boolean transmitFlag=false;
-long lastTransmit=0;
+String msgStore[9];
+byte msgCount=0;
+bool sentFlag=false;
 
 
 //Button related
@@ -114,11 +116,13 @@ void loop() {
     rfBuffer=rfBuffer+digitalRead(devPin[0]);
     if (rfBuffer==7) { //Indicates a rise 00001111
       riseTime=micros();
+      lastRead=riseTime;
       downTime=riseTime-fallTime;
       riseFlag=true;
     }
     else if (rfBuffer==240) { //Indicates a fall 11110000
       fallTime=micros();
+      lastRead=fallTime;
       upTime=fallTime-riseTime;
       fallFlag=true;
     }
@@ -132,6 +136,11 @@ void loop() {
       byteCount=0;
       if (record) { //stop recording if bits are wrong
         record=false;
+      }
+      if (downTime>(9*t4) && sentFlag) {
+        msgCount=0;
+        //Serial.println("New string");
+        sentFlag=false;
       }
     }
     else if (upTime>t1 && upTime<t2) { //Indicates a 0
@@ -169,7 +178,7 @@ void loop() {
       if (byteCount>=msgLengths[msgType]) {
         //Serial.println("-END-");
         msgFlag=true;
-        lastMsgTime=micros();
+        //lastMsgTime=micros();
         record=false;
         byteCount=0;
       }
@@ -178,36 +187,57 @@ void loop() {
   //Process messages
   if (msgFlag) {
     msgFlag=false;
-    if (millis()<lastTriggered) {
-      lastTriggered=millis();
-    }
+    msgCount++;
     
     //In transmission form
+    unsigned int maxMsgCount=0;
     unsigned long dID = 0;
+    unsigned long preMsg = 0;
     dID = byteStore[1] * 16777216 + byteStore[2] * 65536 + byteStore[3] * 256 + byteStore[4];
-    outputString=String(byteStore[0]-120) + ',' + dID;
-    if (msgType==0 || msgType==3) {
-      unsigned long sMsg = 0;
-      sMsg  = byteStore[5] * 16777216 + byteStore[6] * 65536 + byteStore[7] * 256 + byteStore[8];
-      outputString=outputString +','+sMsg;
+    preMsg  = byteStore[5] * 16777216 + byteStore[6] * 65536 + byteStore[7] * 256 + byteStore[8];
+    outputString = String(byteStore[0]-120) + ',' + dID + ',' + preMsg;
+    msgStore[msgCount-1]=outputString;
+    //Serial.println(outputString+','+msgCount);
+    
+    if (msgType==0) {
+      maxMsgCount=9;
     }
-    else if (msgType==1) {
-      byte sMsg = 0;
-      sMsg = byteStore[5];
-      outputString=outputString +','+sMsg;
+    else {
+      maxMsgCount=5;
     }
-    else if (msgType==2) {
-      unsigned int sMsg = 0;
-      sMsg  = byteStore[5] * 256 + byteStore[6];
-      outputString=outputString +','+sMsg;
+
+    if ((msgCount>1) && !sentFlag) {
+      for (int i = 2; i<=msgCount; i++) {
+        if (msgStore[msgCount-1]==msgStore[msgCount-i]) {
+          //Build before transmission
+          if (msgType==0) {
+            unsigned long sMsg = 0;
+            sMsg  = byteStore[5] * 16777216 + byteStore[6] * 65536 + byteStore[7] * 256 + byteStore[8];
+            //sMsg  = msgCount * 65536 + byteStore[7] * 256 + byteStore[8];
+            outputString=String(byteStore[0]-120) + ',' + dID + ',' + sMsg;
+          }
+          else if (msgType==1) {
+            byte sMsg = 0;
+            sMsg = byteStore[5];
+            outputString=String(byteStore[0]-120) + ',' + dID + ',' + sMsg;
+          }
+          else if (msgType==2) {
+            unsigned int sMsg = 0;
+            sMsg  = byteStore[5] * 256 + byteStore[6];
+            outputString=String(byteStore[0]-120) + ',' + dID + ',' + sMsg;
+          }
+          else if (msgType==3) {
+            unsigned long sMsg = 0;
+            sMsg  = byteStore[5] * 16777216 + byteStore[6] * 65536 + byteStore[7] * 256 + byteStore[8];
+            outputString=String(byteStore[0]-120) + ',' + dID + ',' + sMsg;
+          }
+          SendUdpString(outputString);
+          //sentTime=millis();
+          sentFlag=true;
+          break;
+        }
+      }
     }
-    if ((outputString==lastString1 || outputString==lastString2) && (millis()-lastTransmit>550)) {
-      lastTransmit=millis();
-      SendUdpString(outputString);
-      //Serial.println(outputString);
-    }
-    lastString2=lastString1;
-    lastString1=outputString;
   }
 }
 
